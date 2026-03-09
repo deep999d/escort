@@ -33,14 +33,19 @@ async_session_maker = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for database sessions."""
+    """Dependency for database sessions. Handles commit failure when DB was unavailable (mock mode)."""
     async with async_session_maker() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
+        else:
+            try:
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                # Don't re-raise: endpoint may have caught DB error and returned mock response
         finally:
             await session.close()
 

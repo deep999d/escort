@@ -4,6 +4,19 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MOCK_PROVIDERS } from "@/lib/mockProviders";
 
+/** Map backend UUID (00000000-0000-0000-0000-000000000001) to mock id (m1). */
+function providerIdToDisplayName(providerId: string): string | null {
+  if (!providerId) return null;
+  const mock = MOCK_PROVIDERS.find((p) => p.id.toLowerCase() === providerId.toLowerCase());
+  if (mock) return mock.display_name;
+  const lastPart = providerId.split("-").pop() ?? "";
+  const n = parseInt(lastPart, 10);
+  if (n >= 1 && n <= 6) {
+    return MOCK_PROVIDERS.find((p) => p.id === `m${n}`)?.display_name ?? null;
+  }
+  return null;
+}
+
 function uuid4Fallback(): string {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -68,7 +81,7 @@ function ChatStartContent() {
               >
                 <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                   {c.provider_id
-                    ? `Conversation with ${MOCK_PROVIDERS.find((p) => p.id.toLowerCase() === c.provider_id.toLowerCase())?.display_name ?? `Provider ${c.provider_id}`}`
+                    ? `Conversation with ${providerIdToDisplayName(c.provider_id) ?? `Provider ${c.provider_id}`}`
                     : "Conversation"}
                 </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">

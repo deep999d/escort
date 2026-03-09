@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface: #fafafa;
+  --surface-muted: #f4f4f5;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --accent: #0f172a;
+  --accent-subtle: #e2e8f0;
+  --border: #e4e4e7;
+}
+
+.dark {
+  --surface: #0c0a09;
+  --surface-muted: #1c1917;
+  --text: #fafaf9;
+  --text-muted: #a8a29e;
+  --accent: #fafaf9;
+  --accent-subtle: #292524;
+  --border: #292524;
+}
+
+body {
+  font-feature-settings: "rlig" 1, "calt" 1;
+}

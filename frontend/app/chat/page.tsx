@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { MOCK_PROVIDERS } from "@/lib/mockProviders";
 
 function uuid4Fallback(): string {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -66,7 +67,9 @@ function ChatStartContent() {
                 className="block rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
               >
                 <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  {c.provider_id ? `Conversation with Provider ${c.provider_id}` : "Conversation"}
+                  {c.provider_id
+                    ? `Conversation with ${MOCK_PROVIDERS.find((p) => p.id.toLowerCase() === c.provider_id.toLowerCase())?.display_name ?? `Provider ${c.provider_id}`}`
+                    : "Conversation"}
                 </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   {c.created_at ? new Date(c.created_at).toLocaleString() : "—"}

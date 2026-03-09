@@ -1,6 +1,13 @@
 """Mock endpoints for features that will use real APIs later."""
 
+from uuid import UUID
+
 from fastapi import APIRouter
+
+from app.services.mock_store import get_mock_store
+
+# Map mock provider IDs (m1-m6) to placeholder UUIDs - same as messages/booking
+MOCK_PROVIDER_MAP = {f"m{i}": str(UUID(f"00000000-0000-0000-0000-{i:012d}")) for i in range(1, 7)}
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -89,6 +96,17 @@ MOCK_RECOMMENDATIONS = [
     RecommendationItem(provider_id="00000000-0000-0000-0000-000000000001", reason="Matches your preferences", score=0.92),
     RecommendationItem(provider_id="00000000-0000-0000-0000-000000000002", reason="Similar to past bookings", score=0.88),
 ]
+
+
+@router.get("/availability/{provider_id}")
+async def get_provider_availability(provider_id: str):
+    """Get availability slots for provider. Works with mock IDs (m1-m6)."""
+    pid = provider_id.strip().lower()
+    if pid in MOCK_PROVIDER_MAP:
+        pid = MOCK_PROVIDER_MAP[pid]
+    store = get_mock_store()
+    slots = store.get_availability(pid)
+    return {"slots": slots}
 
 
 @router.get("/recommendations", response_model=list[RecommendationItem])

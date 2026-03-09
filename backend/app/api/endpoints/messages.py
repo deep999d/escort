@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.models.message import Message, Conversation
 from app.models.user import User
 from app.services.pii_redaction import redact_pii
+from app.services.mock_store import get_mock_store
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -96,6 +97,18 @@ async def get_conversation(
     return conv
 
 
+@router.get("/conversations")
+async def list_user_conversations(
+    user_id: str | None = None,
+):
+    """List conversations for user. Requires user_id query param. Uses mock store."""
+    if not user_id or not user_id.strip():
+        return []
+    store = get_mock_store()
+    convs = store.get_conversations_for_user(user_id.strip())
+    return [{"id": c["id"], "provider_id": c["provider_id"], "created_at": c["created_at"]} for c in convs]
+
+
 @router.post("/conversations")
 async def create_conversation(
     request: CreateConversationRequest,
@@ -126,8 +139,11 @@ async def create_conversation(
         return {"id": str(conv.id), "created": True}
     except (OperationalError, OSError) as e:
         logger.warning("Database unavailable for create_conversation: %s", e)
-        mock_id = uuid4()
-        return {"id": str(mock_id), "created": True}
+        store = get_mock_store()
+        key = f"{user_id}|{str(provider_id).lower()}"
+        created = key not in store._user_provider_to_conv
+        conv = store.get_or_create_conversation(str(user_id), str(provider_id))
+        return {"id": conv.id, "created": created}
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
@@ -136,7 +152,7 @@ async def get_messages(
     db: AsyncSession = Depends(get_db),
     user_id: UUID | None = None,
 ):
-    """List messages in conversation. Enforces chat expiration. Returns empty list when DB unavailable."""
+    """List messages in conversation. Uses mock store when DB unavailable or conv not in DB."""
     try:
         conv = await get_conversation(conversation_id, user_id, db)
         if conv.expires_at:
@@ -168,7 +184,22 @@ async def get_messages(
         )
     except (OperationalError, OSError) as e:
         logger.warning("Database unavailable for get_messages: %s", e)
-        return ConversationResponse(id=str(conversation_id), messages=[])
+        pass
+    except HTTPException as he:
+        if he.status_code != 404:
+            raise
+        pass
+    store = get_mock_store()
+    conv = store.get_conversation(str(conversation_id))
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return ConversationResponse(
+        id=conv.id,
+        messages=[
+            MessageResponse(id=m.id, sender_type=m.sender_type, content=m.content, is_read=m.is_read, created_at=m.created_at)
+            for m in conv.messages
+        ],
+    )
 
 
 @router.post("/conversations/{conversation_id}/messages", response_model=MessageResponse)
@@ -204,12 +235,14 @@ async def send_message(
         )
     except (OperationalError, OSError) as e:
         logger.warning("Database unavailable for send_message: %s", e)
-        mock_id = uuid4()
-        now = datetime.now(timezone.utc).isoformat()
+        store = get_mock_store()
+        msg = store.add_message(str(conversation_id), sender_type, content)
+        if not msg:
+            raise HTTPException(status_code=404, detail="Conversation not found")
         return MessageResponse(
-            id=str(mock_id),
-            sender_type=sender_type,
-            content=content,
-            is_read=False,
-            created_at=now,
+            id=msg.id,
+            sender_type=msg.sender_type,
+            content=msg.content,
+            is_read=msg.is_read,
+            created_at=msg.created_at,
         )

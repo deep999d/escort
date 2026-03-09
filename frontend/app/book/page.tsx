@@ -11,6 +11,7 @@ export default function BookPage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availableSlots, setAvailableSlots] = useState<{ start: string; end: string }[]>([]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -45,6 +46,28 @@ export default function BookPage() {
     }
   };
 
+  useEffect(() => {
+    if (!providerId) return;
+    fetch(`/api/v1/mocks/availability/${providerId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => setAvailableSlots(d?.slots ?? []))
+      .catch(() => {});
+  }, [providerId]);
+
+  const selectSlot = (start: string, end: string) => {
+    const d = new Date(start);
+    const endD = new Date(end);
+    const form = document.querySelector("form");
+    if (form) {
+      const dateInput = form.querySelector<HTMLInputElement>("input[name='date']");
+      const timeInput = form.querySelector<HTMLInputElement>("input[name='time']");
+      const durationInput = form.querySelector<HTMLInputElement>("input[name='duration']");
+      if (dateInput) dateInput.value = d.toISOString().slice(0, 10);
+      if (timeInput) timeInput.value = d.toTimeString().slice(0, 5);
+      if (durationInput) durationInput.value = String(Math.round((endD.getTime() - d.getTime()) / 60000));
+    }
+  };
+
   if (!providerId) {
     return (
       <main className="min-h-screen p-6 max-w-xl mx-auto">
@@ -68,9 +91,14 @@ export default function BookPage() {
             Your booking request has been sent. We&apos;ll confirm availability and coordinate through the platform. No contact details are shared until confirmation.
           </p>
         </div>
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-zinc-600 dark:text-zinc-400 mt-6">
-          <ChevronLeft className="w-4 h-4" /> Back to search
-        </Link>
+        <div className="flex gap-4 mt-6">
+          <Link href="/bookings" className="inline-flex items-center gap-1 text-sm text-zinc-600 dark:text-zinc-400 hover:underline">
+            View my bookings
+          </Link>
+          <Link href="/" className="inline-flex items-center gap-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <ChevronLeft className="w-4 h-4" /> Back to search
+          </Link>
+        </div>
       </main>
     );
   }
@@ -82,6 +110,24 @@ export default function BookPage() {
       </Link>
 
       <h1 className="text-xl font-light text-zinc-900 dark:text-zinc-100 mb-6">Request booking</h1>
+
+      {availableSlots.length > 0 && (
+        <div className="mb-6">
+          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Available slots (click to select)</p>
+          <div className="flex flex-wrap gap-2">
+            {availableSlots.slice(0, 8).map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => selectSlot(s.start, s.end)}
+                className="px-3 py-1.5 rounded-lg text-sm bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+              >
+                {new Date(s.start).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

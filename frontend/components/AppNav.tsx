@@ -28,7 +28,7 @@ export function AppNav() {
             <MessageCircle className="w-4 h-4" /> Messages
           </Link>
           <Link
-            href="/account"
+            href="/bookings"
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200"
           >
             <Calendar className="w-4 h-4" /> Bookings

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_optional_user_id
 from app.core.database import get_db
+from app.services.mock_store import get_mock_store
 from app.services.audit.logger import audit_log
 from app.services.conversion.tracker import ConversionTracker
 from app.models.booking import Booking
@@ -75,14 +76,23 @@ async def create_booking(
         )
     except (OperationalError, OSError) as e:
         logger.warning("Database unavailable for create_booking: %s", e)
-        mock_id = uuid4()
+        store = get_mock_store()
+        requested_at_str = requested_at.isoformat() if hasattr(requested_at, "isoformat") else str(requested_at)
+        b = store.create_booking(
+            user_id=str(user_id),
+            provider_id=str(provider_id),
+            requested_at=requested_at_str,
+            duration_minutes=request.duration_minutes,
+            session_id=session_id,
+            notes=request.notes,
+        )
         return BookingResponse(
-            id=mock_id,
-            status="inquiry",
+            id=UUID(b.id),
+            status=b.status,
             provider_id=provider_id,
             requested_at=requested_at,
             confirmed_at=None,
-            duration_minutes=request.duration_minutes,
+            duration_minutes=b.duration_minutes,
             amount=None,
         )
 
@@ -126,7 +136,27 @@ async def list_bookings(
         ]
     except (OperationalError, OSError) as e:
         logger.warning("Database unavailable for list_bookings: %s", e)
-        return []
+        store = get_mock_store()
+        uid = str(user_id) if user_id else None
+        bookings = store.get_bookings_for_user(uid, x_session_id)
+        def _to_uuid(s: str) -> UUID:
+            try:
+                return UUID(s) if len(s) == 36 and s.count("-") == 4 else MOCK_PROVIDER_UUID
+            except ValueError:
+                return MOCK_PROVIDER_UUID
+
+        return [
+            BookingResponse(
+                id=UUID(b.id),
+                status=b.status,
+                provider_id=_to_uuid(b.provider_id),
+                requested_at=datetime.fromisoformat(b.requested_at.replace("Z", "+00:00")),
+                confirmed_at=None,
+                duration_minutes=b.duration_minutes,
+                amount=None,
+            )
+            for b in bookings
+        ]
 
 
 VALID_TRANSITIONS = {
@@ -185,14 +215,23 @@ async def update_booking_status(
         )
     except (OperationalError, OSError) as e:
         logger.warning("Database unavailable for update_booking_status: %s", e)
-        now = datetime.now(timezone.utc)
-        confirmed = now if request.status in ("time_locked", "meeting_confirmed", "completed") else None
+        store = get_mock_store()
+        b = store.get_booking(str(booking_id))
+        if not b:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        allowed = VALID_TRANSITIONS.get(b.status, ["cancelled"])  # inquiry -> availability_confirmed or cancelled
+        if request.status not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid transition from {b.status} to {request.status}",
+            )
+        b = store.update_booking_status(str(booking_id), request.status)
         return BookingResponse(
-            id=booking_id,
-            status=request.status,
+            id=UUID(b.id),
+            status=b.status,
             provider_id=MOCK_PROVIDER_UUID,
-            requested_at=now,
-            confirmed_at=confirmed,
-            duration_minutes=None,
+            requested_at=datetime.fromisoformat(b.requested_at.replace("Z", "+00:00")),
+            confirmed_at=datetime.now(timezone.utc) if request.status in ("availability_confirmed", "time_locked", "meeting_confirmed", "completed") else None,
+            duration_minutes=b.duration_minutes,
             amount=None,
         )

@@ -70,7 +70,21 @@ interface ProviderDetail {
   availability_preview: { start: string; end: string }[];
 }
 
-function mockToDetail(m: typeof MOCK_PROVIDERS[0]): ProviderDetail {
+function getDefaultMockAvailability(): { start: string; end: string }[] {
+  const slots: { start: string; end: string }[] = [];
+  const now = new Date();
+  for (let i = 1; i <= 5; i++) {
+    const start = new Date(now);
+    start.setDate(start.getDate() + i);
+    start.setHours(18, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(22, 0, 0, 0);
+    slots.push({ start: start.toISOString(), end: end.toISOString() });
+  }
+  return slots;
+}
+
+function mockToDetail(m: typeof MOCK_PROVIDERS[0], availabilityPreview?: { start: string; end: string }[]): ProviderDetail {
   return {
     id: m.id,
     display_name: m.display_name,
@@ -86,7 +100,7 @@ function mockToDetail(m: typeof MOCK_PROVIDERS[0]): ProviderDetail {
     is_verified: m.is_verified,
     response_time_avg_sec: m.response_min * 60,
     availability_trust_score: m.reliability_percent / 100,
-    availability_preview: [],
+    availability_preview: availabilityPreview ?? getDefaultMockAvailability(),
   };
 }
 
@@ -111,6 +125,15 @@ export default function ProviderPage() {
     if (mock) {
       setProvider(mockToDetail(mock));
       setLoading(false);
+      // Fetch availability from mock store (provider may have set custom slots)
+      fetch(`/api/v1/mocks/availability/${id}`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.slots?.length) {
+            setProvider((p) => p ? { ...p, availability_preview: data.slots } : p);
+          }
+        })
+        .catch(() => {});
       return;
     }
     const sessionId = localStorage.getItem("anon_session_id");
